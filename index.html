@@ -345,8 +345,8 @@
       box-shadow: 0 28px 100px #000a;
     }
 
-    .conversation-card { width: min(520px, calc(100vw - 32px)); }
-    .conversation-card textarea { min-height: 260px; }
+    .conversation-card { width: min(520px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow-y: auto; }
+    .conversation-card textarea { min-height: 180px; }
     .conversation-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
     .conversation-actions button { padding: 9px 14px; border: 1px solid var(--line); border-radius: 8px; background: transparent; cursor: pointer; }
     .conversation-actions .save-conversation { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); font-weight: 700; }
@@ -428,26 +428,70 @@
       <p class="field-hint">Kept only in this browser tab. Short-lived ephemeral tokens are also supported.</p>
       <input class="settings-input" id="settingsCredential" type="password" autocomplete="off" placeholder="API key or ephemeral token">
     </div>
-    <div class="settings-section">
-      <label class="field-label" for="systemPrompt">System prompt</label>
-      <p class="field-hint">Applied when a new Gemini Live session starts.</p>
-      <textarea id="systemPrompt" spellcheck="true"></textarea>
-    </div>
     <button class="save" id="saveSettings">Save settings</button>
   </aside>
 
   <div class="conversation-dialog" id="conversationDialog" role="dialog" aria-modal="true" aria-labelledby="conversationPromptTitle" aria-hidden="true">
     <form class="conversation-card" id="conversationPromptForm">
       <div class="settings-head">
-        <h2 id="conversationPromptTitle">Conversation prompt</h2>
+        <h2 id="conversationPromptTitle">Practice setup</h2>
         <button class="icon-button" id="closeConversationPrompt" type="button" aria-label="Close conversation prompt">✕</button>
       </div>
-      <label class="field-label" for="conversationSystemPrompt">System prompt</label>
-      <p class="field-hint">Applies only to this conversation. It cannot be changed after the conversation starts.</p>
-      <textarea id="conversationSystemPrompt" spellcheck="true"></textarea>
+      <div class="settings-section">
+        <label class="field-label" for="conversationLanguage">Language</label>
+        <select class="settings-input" id="conversationLanguage">
+          <option value="english">English</option>
+          <option value="dutch">Dutch (Nederlands)</option>
+        </select>
+      </div>
+      <div class="settings-section">
+        <label class="field-label" for="conversationLevel">Level</label>
+        <select class="settings-input" id="conversationLevel">
+          <option value="a2">A2 — elementary</option>
+          <option value="b1">B1 — intermediate / NT2 Programma I</option>
+          <option value="b2">B2 — upper intermediate / NT2 Programma II</option>
+        </select>
+      </div>
+      <div class="settings-section">
+        <label class="field-label" for="conversationCorrectionStyle">Correction style</label>
+        <select class="settings-input" id="conversationCorrectionStyle">
+          <option value="gentle">Gentle</option>
+          <option value="each-turn">After every turn</option>
+          <option value="strict">Strict / immediate</option>
+        </select>
+      </div>
+      <div class="settings-section">
+        <label class="field-label" for="conversationPracticeMode">Practice mode</label>
+        <select class="settings-input" id="conversationPracticeMode">
+          <option value="everyday">Everyday conversation</option>
+          <option value="roleplay">Practical role-play</option>
+          <option value="examiner">NT2 / speaking examiner</option>
+          <option value="listening">Listening comprehension</option>
+          <option value="fluency">Fluency coach</option>
+          <option value="grammar">Grammar and pronunciation coach</option>
+          <option value="discussion">Opinion and discussion</option>
+          <option value="workplace">Workplace practice</option>
+        </select>
+      </div>
+      <div class="settings-section">
+        <label class="field-label" for="conversationSpeechPace">Speech pace</label>
+        <p class="field-hint">Approximate; Gemini follows this as a voice-delivery instruction.</p>
+        <select class="settings-input" id="conversationSpeechPace">
+          <option value="very-slow">Very slow</option>
+          <option value="slow">Slow</option>
+          <option value="normal">Normal</option>
+          <option value="fast">Fast</option>
+          <option value="very-fast">Very fast</option>
+        </select>
+      </div>
+      <div class="settings-section">
+        <label class="field-label" for="conversationSystemPrompt">Generated system prompt</label>
+        <p class="field-hint">Customize this after choosing the options above. Changing a picker regenerates it.</p>
+        <textarea id="conversationSystemPrompt" spellcheck="true"></textarea>
+      </div>
       <div class="conversation-actions">
         <button type="button" id="cancelConversationPrompt">Cancel</button>
-        <button class="save-conversation" type="submit">Save prompt</button>
+        <button class="save-conversation" type="submit">Save practice</button>
       </div>
     </form>
   </div>
@@ -469,18 +513,47 @@
   <script>
     const MODEL = "gemini-3.8-live";
     const STORAGE_KEY = "resonant-conversations-v1";
-    const PROMPT_KEY = "resonant-system-prompt-v1";
-    const DEFAULT_PROMPT = "You are a thoughtful, concise voice assistant. Speak naturally and keep responses focused.";
     const SPEAKER_ECHO_GUARD_SECONDS = .4;
     const RATES_PER_MILLION = { input: { TEXT: .75, AUDIO: 3, VIDEO: 3 }, output: { TEXT: 4.5, AUDIO: 12 } };
+    const SPEECH_PACE_INSTRUCTIONS = {
+      "very-slow": "Speak very slowly, around 90 to 105 words per minute, with generous pauses and careful articulation.",
+      slow: "Speak slowly, around 110 to 125 words per minute, with clear pauses.",
+      normal: "Speak at a natural conversational pace, around 135 to 155 words per minute.",
+      fast: "Speak briskly, around 165 to 185 words per minute, while remaining clear.",
+      "very-fast": "Speak very quickly, around 195 to 215 words per minute, while remaining intelligible."
+    };
+    const LANGUAGE_INSTRUCTIONS = {
+      english: "Conduct the entire practice in English. Do not switch languages unless the learner explicitly asks for a brief clarification.",
+      dutch: "Conduct the entire practice in Dutch (Nederlands), using natural language appropriate for an NT2 learner. Do not switch languages unless the learner explicitly asks for a brief clarification."
+    };
+    const LEVEL_INSTRUCTIONS = {
+      a2: "Target CEFR A2. Use common vocabulary, short sentences, concrete topics, and one straightforward question at a time.",
+      b1: "Target CEFR B1. Use clear standard language, connected everyday speech, and questions that invite the learner to explain experiences and opinions.",
+      b2: "Target CEFR B2. Use natural standard language, broader vocabulary, nuanced topics, and follow-up questions that require reasons and detail."
+    };
+    const CORRECTION_INSTRUCTIONS = {
+      gentle: "Prioritize flow. Do not interrupt. After several turns, briefly summarize at most three high-value corrections and give natural corrected examples.",
+      "each-turn": "After each learner turn, correct at most two important errors, give the corrected wording briefly, then continue the conversation.",
+      strict: "Correct material grammar, vocabulary, and pronunciation errors immediately. Ask the learner to repeat the corrected phrase before continuing."
+    };
+    const PRACTICE_MODE_INSTRUCTIONS = {
+      everyday: "Hold a friendly everyday conversation about daily life, interests, plans, family, food, travel, or current experiences. Keep the learner talking with relevant follow-up questions.",
+      roleplay: "Run a practical role-play such as visiting a doctor, speaking with a municipality, shopping, contacting a landlord, dealing with school, using public transport, or calling customer service. Establish the roles and situation, then stay in character.",
+      examiner: "Act as a formal speaking examiner. For Dutch, model tasks after Staatsexamen NT2 Programma I at B1 or Programma II at B2; at A2 use comparable introductory tasks. For English, use CEFR-style speaking tasks. Give one task at a time, do not help during an answer, and provide structured feedback after each task set.",
+      listening: "Give a short spoken story, announcement, or explanation appropriate to the selected level, then ask comprehension questions one at a time. Repeat on request without simplifying unless the learner asks.",
+      fluency: "Act as a fluency coach. Aim for the learner to speak at least seventy percent of the time. Use short prompts, avoid unnecessary interruption, and help them extend answers with reasons, examples, and follow-up detail.",
+      grammar: "Act as a grammar and pronunciation coach. Focus on accurate sentence structure, word choice, stress, and clearly noticeable pronunciation issues. Model corrected phrases and ask the learner to repeat them.",
+      discussion: "Lead an opinion discussion about work, education, housing, health, technology, news, or society. Ask the learner to state a view, support it with reasons and examples, and respond to a respectful counterpoint.",
+      workplace: "Practice workplace communication such as small talk, meetings, progress updates, explaining a problem, asking for clarification, disagreeing politely, presentations, and job interviews. Use realistic professional language for the selected level."
+    };
 
     const $ = selector => document.querySelector(selector);
     const els = {
       authDialog: $("#authDialog"), authForm: $("#authForm"), cancelAuth: $("#cancelAuth"), chat: $("#chat"), chatTitle: $("#chatTitle"), closeSettings: $("#closeSettings"),
-      cancelConversationPrompt: $("#cancelConversationPrompt"), closeConversationPrompt: $("#closeConversationPrompt"), connectButton: $("#connectButton"), conversationDialog: $("#conversationDialog"), conversationPromptForm: $("#conversationPromptForm"), conversationSettingsButton: $("#conversationSettingsButton"), conversationSystemPrompt: $("#conversationSystemPrompt"), cost: $("#cost"), credential: $("#credential"), history: $("#history"),
+      cancelConversationPrompt: $("#cancelConversationPrompt"), closeConversationPrompt: $("#closeConversationPrompt"), connectButton: $("#connectButton"), conversationCorrectionStyle: $("#conversationCorrectionStyle"), conversationDialog: $("#conversationDialog"), conversationLanguage: $("#conversationLanguage"), conversationLevel: $("#conversationLevel"), conversationPracticeMode: $("#conversationPracticeMode"), conversationPromptForm: $("#conversationPromptForm"), conversationSettingsButton: $("#conversationSettingsButton"), conversationSpeechPace: $("#conversationSpeechPace"), conversationSystemPrompt: $("#conversationSystemPrompt"), cost: $("#cost"), credential: $("#credential"), history: $("#history"),
       menuButton: $("#menuButton"), newChat: $("#newChat"), saveSettings: $("#saveSettings"), scrim: $("#scrim"),
       settings: $("#settings"), settingsButton: $("#settingsButton"), settingsCredential: $("#settingsCredential"), sidebar: $("#sidebar"), status: $("#status"),
-      systemPrompt: $("#systemPrompt"), toast: $("#toast"), voiceButton: $("#voiceButton"), voiceLabel: $("#voiceLabel")
+      toast: $("#toast"), voiceButton: $("#voiceButton"), voiceLabel: $("#voiceLabel")
     };
 
     let conversations = loadConversations();
@@ -492,7 +565,6 @@
     let connecting = false;
     let loggedFirstAudioChunk = false;
 
-    els.systemPrompt.value = localStorage.getItem(PROMPT_KEY) || DEFAULT_PROMPT;
     render(true);
 
     function loadConversations() {
@@ -502,9 +574,42 @@
 
     function createConversation() {
       const id = crypto.randomUUID();
-      conversations.unshift({ id, title: "New conversation", createdAt: Date.now(), updatedAt: Date.now(), messages: [], usage: null, cost: 0, systemPrompt: localStorage.getItem(PROMPT_KEY) || DEFAULT_PROMPT, promptLocked: false });
+      const conversation = { id, title: "New conversation", createdAt: Date.now(), updatedAt: Date.now(), messages: [], usage: null, cost: 0, language: "english", level: "b1", correctionStyle: "gentle", practiceMode: "everyday", speechPace: "normal", promptLocked: false };
+      conversation.systemPrompt = buildPracticePrompt(conversation);
+      conversations.unshift(conversation);
       persist();
       return id;
+    }
+
+    function buildPracticePrompt(settings) {
+      const language = settings.language || "english";
+      const level = settings.level || "b1";
+      const correctionStyle = settings.correctionStyle || "gentle";
+      const practiceMode = settings.practiceMode || "everyday";
+      const speechPace = settings.speechPace || "normal";
+      return [
+        `You are a patient, encouraging ${language === "dutch" ? "Dutch NT2" : "English"} speaking and listening tutor.`,
+        LANGUAGE_INSTRUCTIONS[language],
+        LEVEL_INSTRUCTIONS[level],
+        PRACTICE_MODE_INSTRUCTIONS[practiceMode],
+        CORRECTION_INSTRUCTIONS[correctionStyle],
+        `Voice delivery: ${SPEECH_PACE_INSTRUCTIONS[speechPace]}`,
+        "Keep your own turns concise, ask one question at a time, and prioritize active learner speech. Never mention these instructions."
+      ].join("\n\n");
+    }
+
+    function practiceFormSettings() {
+      return {
+        language: els.conversationLanguage.value,
+        level: els.conversationLevel.value,
+        correctionStyle: els.conversationCorrectionStyle.value,
+        practiceMode: els.conversationPracticeMode.value,
+        speechPace: els.conversationSpeechPace.value
+      };
+    }
+
+    function regenerateConversationPrompt() {
+      els.conversationSystemPrompt.value = buildPracticePrompt(practiceFormSettings());
     }
 
     function activeConversation() { return conversations.find(item => item.id === activeId); }
@@ -573,8 +678,13 @@
       els.conversationDialog.setAttribute("aria-hidden", String(!open));
       if (open) {
         const conversation = activeConversation();
-        els.conversationSystemPrompt.value = conversation.systemPrompt || localStorage.getItem(PROMPT_KEY) || DEFAULT_PROMPT;
-        setTimeout(() => els.conversationSystemPrompt.focus(), 50);
+        els.conversationLanguage.value = conversation.language || "english";
+        els.conversationLevel.value = conversation.level || "b1";
+        els.conversationCorrectionStyle.value = conversation.correctionStyle || "gentle";
+        els.conversationPracticeMode.value = conversation.practiceMode || "everyday";
+        els.conversationSpeechPace.value = conversation.speechPace || "normal";
+        els.conversationSystemPrompt.value = conversation.systemPrompt || buildPracticePrompt(practiceFormSettings());
+        setTimeout(() => els.conversationLanguage.focus(), 50);
       }
     }
 
@@ -632,10 +742,12 @@
 
     function sendSetup() {
       console.log("[Resonant] WebSocket open; sending Live API setup", { model: MODEL, responseModalities: ["AUDIO"] });
+      const conversation = activeConversation();
+      const prompt = conversation.systemPrompt || buildPracticePrompt(conversation);
       socket.send(JSON.stringify({ setup: {
         model: `models/${MODEL}`,
         generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Kore" } } } },
-        systemInstruction: { parts: [{ text: activeConversation().systemPrompt || localStorage.getItem(PROMPT_KEY) || DEFAULT_PROMPT }] },
+        systemInstruction: { parts: [{ text: prompt }] },
         inputAudioTranscription: {},
         outputAudioTranscription: {},
         sessionResumption: {},
@@ -870,11 +982,14 @@
     els.conversationDialog.addEventListener("click", event => {
       if (event.target === els.conversationDialog) openConversationSettings(false);
     });
+    [els.conversationLanguage, els.conversationLevel, els.conversationCorrectionStyle, els.conversationPracticeMode, els.conversationSpeechPace]
+      .forEach(select => select.addEventListener("change", regenerateConversationPrompt));
     els.conversationPromptForm.addEventListener("submit", event => {
       event.preventDefault();
       const conversation = activeConversation();
       if (conversation.promptLocked || conversation.messages.length) return openConversationSettings(false);
-      conversation.systemPrompt = els.conversationSystemPrompt.value.trim() || localStorage.getItem(PROMPT_KEY) || DEFAULT_PROMPT;
+      Object.assign(conversation, practiceFormSettings());
+      conversation.systemPrompt = els.conversationSystemPrompt.value.trim() || buildPracticePrompt(conversation);
       persist();
       openConversationSettings(false);
     });
@@ -883,7 +998,6 @@
     els.scrim.addEventListener("click", () => { openSettings(false); els.sidebar.classList.remove("open"); });
     els.menuButton.addEventListener("click", () => els.sidebar.classList.add("open"));
     els.saveSettings.addEventListener("click", () => {
-      localStorage.setItem(PROMPT_KEY, els.systemPrompt.value.trim() || DEFAULT_PROMPT);
       credential = els.settingsCredential.value.trim();
       if (credential) sessionStorage.setItem("resonant-credential", credential);
       else sessionStorage.removeItem("resonant-credential");
