@@ -367,15 +367,25 @@
     @keyframes blink { 50% { opacity: 0; } }
 
     @media (max-width: 720px) {
-      .app { grid-template-columns: 1fr; }
-      .sidebar { position: fixed; z-index: 8; inset: 0 18% 0 0; box-shadow: 30px 0 80px #000b; transform: translateX(-102%); transition: transform .25s; }
+      .app { grid-template-columns: 1fr; height: 100dvh; }
+      .sidebar { position: fixed; z-index: 10; inset: 0 18% 0 0; height: 100dvh; padding-bottom: max(16px, env(safe-area-inset-bottom)); box-shadow: 30px 0 80px #000b; transform: translateX(-102%); transition: transform .25s; }
       .sidebar.open { transform: translateX(0); }
+      .scrim.sidebar-open { opacity: 1; pointer-events: auto; }
       .mobile-menu { display: grid; }
-      .topbar { padding: 15px 18px; }
+      .main { height: 100dvh; }
+      .topbar { gap: 8px; padding: 15px 18px; }
+      .topbar-left { flex: 1; overflow: hidden; }
+      .title-wrap { flex: 1; }
+      .status { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+      .voice-button, .topbar-actions { flex: none; }
       .chat { padding: 30px 18px 18px; }
       .message { grid-template-columns: 35px minmax(0, 1fr); gap: 10px; }
       .avatar { width: 30px; }
       .cost { font-size: 10px; }
+    }
+
+    @media (max-width: 359px) {
+      .status { display: none; }
     }
   </style>
 </head>
@@ -395,7 +405,7 @@
     <main class="main">
       <header class="topbar">
         <div class="topbar-left">
-          <button class="icon-button mobile-menu" id="menuButton" aria-label="Open conversation history">☰</button>
+          <button class="icon-button mobile-menu" id="menuButton" aria-label="Open conversation history" aria-controls="sidebar" aria-expanded="false">☰</button>
           <div class="title-wrap">
             <h1 class="title" id="chatTitle">New conversation</h1>
             <div class="status-row">
@@ -670,6 +680,12 @@
       els.settings.setAttribute("aria-hidden", String(!open));
       els.scrim.classList.toggle("open", open);
       if (open) els.settingsCredential.value = credential;
+    }
+
+    function openSidebar(open) {
+      els.sidebar.classList.toggle("open", open);
+      els.scrim.classList.toggle("sidebar-open", open);
+      els.menuButton.setAttribute("aria-expanded", String(open));
     }
 
     function openConversationSettings(open) {
@@ -964,14 +980,14 @@
       if (!item) return;
       stopVoice();
       activeId = item.dataset.id;
-      els.sidebar.classList.remove("open");
+      openSidebar(false);
       render(true);
     });
 
     els.newChat.addEventListener("click", () => {
       stopVoice();
       activeId = createConversation();
-      els.sidebar.classList.remove("open");
+      openSidebar(false);
       render(true);
     });
 
@@ -993,10 +1009,10 @@
       persist();
       openConversationSettings(false);
     });
-    els.settingsButton.addEventListener("click", () => openSettings(true));
+    els.settingsButton.addEventListener("click", () => { openSidebar(false); openSettings(true); });
     els.closeSettings.addEventListener("click", () => openSettings(false));
-    els.scrim.addEventListener("click", () => { openSettings(false); els.sidebar.classList.remove("open"); });
-    els.menuButton.addEventListener("click", () => els.sidebar.classList.add("open"));
+    els.scrim.addEventListener("click", () => { openSettings(false); openSidebar(false); });
+    els.menuButton.addEventListener("click", () => openSidebar(true));
     els.saveSettings.addEventListener("click", () => {
       credential = els.settingsCredential.value.trim();
       if (credential) sessionStorage.setItem("resonant-credential", credential);
