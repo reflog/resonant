@@ -1,0 +1,908 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Resonant — Voice conversations</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #f3f0e8;
+      --muted: #918f89;
+      --faint: #242522;
+      --panel: #181916;
+      --line: #30312d;
+      --accent: #d9ff5b;
+      --accent-ink: #171b08;
+      --danger: #ff7a6e;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #10110f;
+      color: var(--ink);
+      overflow: hidden;
+    }
+
+    button, textarea, input { font: inherit; }
+    button { color: inherit; }
+
+    .app {
+      display: grid;
+      grid-template-columns: 288px minmax(0, 1fr);
+      height: 100vh;
+    }
+
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      min-width: 0;
+      overflow: hidden;
+      padding: 22px 14px 16px;
+      border-right: 1px solid var(--line);
+      background: #131411;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      padding: 0 8px 24px;
+      font: 700 15px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .brand-mark {
+      width: 28px;
+      aspect-ratio: 1;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: inset 0 0 0 8px #131411, 0 0 24px #d9ff5b33;
+    }
+
+    .new-chat {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--faint);
+      text-align: left;
+      cursor: pointer;
+      transition: border-color .2s, transform .2s;
+    }
+
+    .new-chat:hover { border-color: #696b62; transform: translateY(-1px); }
+
+    .history-label {
+      margin: 28px 10px 10px;
+      color: var(--muted);
+      font: 600 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    .history {
+      display: flex;
+      flex: 1;
+      flex-direction: column;
+      gap: 3px;
+      min-height: 0;
+      overflow-y: auto;
+    }
+
+    .history-item {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      width: 100%;
+      padding: 11px 10px;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .history-item:hover, .history-item.active { background: var(--faint); }
+    .history-item.active { box-shadow: inset 2px 0 var(--accent); }
+    .history-title { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+    .history-time { color: var(--muted); font-size: 11px; }
+
+    .sidebar-footer {
+      display: flex;
+      flex: none;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 8px 0;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .icon-button {
+      display: grid;
+      width: 32px;
+      aspect-ratio: 1;
+      place-items: center;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+    }
+
+    .icon-button:hover { border-color: var(--line); color: var(--ink); }
+    .icon-button:disabled { cursor: not-allowed; opacity: .35; }
+    .icon-button:disabled:hover { border-color: transparent; color: var(--muted); }
+
+    .main {
+      position: relative;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      height: 100vh;
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 50% 65%, #d9ff5b0b, transparent 34%),
+        #10110f;
+    }
+
+    .topbar {
+      display: flex;
+      flex: none;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 28px;
+      border-bottom: 1px solid #242521;
+    }
+
+    .topbar-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .title-wrap { min-width: 0; }
+    .title { margin: 0; overflow: hidden; font-size: 15px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+    .status-row { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+    .status { color: var(--muted); font-size: 12px; white-space: nowrap; }
+    .status.live { color: var(--accent); }
+
+    .topbar-actions { display: flex; align-items: center; gap: 6px; }
+    .cost {
+      padding: 7px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: #c4c3bd;
+      font: 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    .chat {
+      width: min(760px, 100%);
+      min-height: 0;
+      margin: 0 auto;
+      padding: 44px 28px 28px;
+      overflow-y: scroll;
+      scrollbar-color: #707466 #171815;
+      scrollbar-gutter: stable;
+      scrollbar-width: thin;
+      scroll-behavior: smooth;
+    }
+
+    .chat::-webkit-scrollbar { width: 8px; }
+    .chat::-webkit-scrollbar-track { background: #171815; }
+    .chat::-webkit-scrollbar-thumb { border: 2px solid #171815; border-radius: 999px; background: #707466; }
+
+    .empty {
+      display: grid;
+      min-height: 100%;
+      place-content: center;
+      justify-items: center;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .empty-orb {
+      display: grid;
+      width: 72px;
+      aspect-ratio: 1;
+      margin-bottom: 24px;
+      place-items: center;
+      border: 1px solid #45483b;
+      border-radius: 50%;
+      background: #d9ff5b0a;
+      box-shadow: 0 0 80px #d9ff5b12;
+      color: var(--accent);
+      font-size: 24px;
+    }
+
+    .empty h2 { margin: 0 0 8px; color: var(--ink); font: 500 26px/1.2 Georgia, serif; }
+    .empty p { max-width: 320px; margin: 0; font-size: 13px; line-height: 1.6; }
+
+    .message { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 14px; margin-bottom: 30px; }
+    .avatar {
+      display: grid;
+      width: 34px;
+      aspect-ratio: 1;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      color: var(--muted);
+      font: 600 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    .message.model .avatar { border-color: #7e8e3c; color: var(--accent); }
+    .speaker { margin-bottom: 7px; color: var(--muted); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+    .bubble { max-width: 630px; color: #dfddd7; font-size: 15px; line-height: 1.65; }
+    .message.partial .bubble::after { content: ""; display: inline-block; width: 5px; height: 14px; margin-left: 5px; background: var(--accent); animation: blink .8s steps(2) infinite; vertical-align: -2px; }
+
+    .voice-button {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      justify-content: center;
+      padding: 6px 10px;
+      border: 0;
+      border-radius: 999px;
+      background: var(--accent);
+      color: var(--accent-ink);
+      font-size: 11px;
+      font-weight: 750;
+      cursor: pointer;
+      box-shadow: 0 4px 14px #d9ff5b1a;
+      transition: transform .2s, box-shadow .2s;
+    }
+
+    .voice-button:hover { transform: translateY(-1px); box-shadow: 0 6px 18px #d9ff5b29; }
+    .voice-button.active { background: var(--danger); color: #2b0c09; box-shadow: 0 0 0 3px #ff7a6e18; }
+    .voice-button:disabled { cursor: wait; filter: grayscale(.4); opacity: .7; transform: none; }
+    .wave { display: flex; align-items: center; gap: 2px; height: 15px; }
+    .wave i { display: block; width: 2px; height: 5px; border-radius: 2px; background: currentColor; }
+    .active .wave i { animation: wave .7s ease-in-out infinite alternate; }
+    .active .wave i:nth-child(2) { animation-delay: -.25s; }
+    .active .wave i:nth-child(3) { animation-delay: -.45s; }
+    .scrim {
+      position: fixed;
+      inset: 0;
+      z-index: 9;
+      background: #0008;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .25s;
+    }
+
+    .scrim.open { opacity: 1; pointer-events: auto; }
+
+    .settings {
+      position: fixed;
+      z-index: 10;
+      top: 0;
+      right: 0;
+      width: min(440px, 100vw);
+      height: 100vh;
+      padding: 26px;
+      border-left: 1px solid var(--line);
+      background: #171815;
+      box-shadow: -30px 0 80px #0006;
+      transform: translateX(102%);
+      transition: transform .28s cubic-bezier(.2,.8,.2,1);
+    }
+
+    .settings.open { transform: translateX(0); }
+    .settings-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 34px; }
+    .settings h2 { margin: 0; font: 500 24px/1.2 Georgia, serif; }
+    .settings-section { margin-bottom: 26px; }
+    .field-label { display: block; margin-bottom: 9px; color: #d2d0ca; font-size: 13px; font-weight: 600; }
+    .field-hint { margin: 0 0 12px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+    .settings-input {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      outline: 0;
+      background: #10110f;
+      color: var(--ink);
+    }
+
+    .settings-input:focus { border-color: #7e8e3c; box-shadow: 0 0 0 3px #d9ff5b0b; }
+    textarea {
+      width: 100%;
+      min-height: 220px;
+      resize: vertical;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      outline: 0;
+      background: #10110f;
+      color: var(--ink);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    textarea:focus { border-color: #7e8e3c; box-shadow: 0 0 0 3px #d9ff5b0b; }
+    .save { margin-top: 14px; padding: 10px 16px; border: 0; border-radius: 8px; background: var(--ink); color: #171815; font-weight: 700; cursor: pointer; }
+
+    .auth-dialog, .conversation-dialog {
+      position: fixed;
+      z-index: 30;
+      inset: 0;
+      display: none;
+      place-items: center;
+      padding: 16px;
+      background: #000a;
+      backdrop-filter: blur(4px);
+    }
+
+    .auth-dialog.open, .conversation-dialog.open { display: grid; }
+    .auth, .conversation-card {
+      width: min(420px, calc(100vw - 32px));
+      padding: 26px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--panel);
+      color: var(--ink);
+      box-shadow: 0 28px 100px #000a;
+    }
+
+    .conversation-card { width: min(520px, calc(100vw - 32px)); }
+    .conversation-card textarea { min-height: 260px; }
+    .conversation-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+    .conversation-actions button { padding: 9px 14px; border: 1px solid var(--line); border-radius: 8px; background: transparent; cursor: pointer; }
+    .conversation-actions .save-conversation { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+
+    .auth h2 { margin: 0 0 8px; font: 500 23px/1.2 Georgia, serif; }
+    .auth p { margin: 0 0 20px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+    .auth input { width: 100%; padding: 12px; border: 1px solid var(--line); border-radius: 8px; outline: 0; background: #10110f; color: var(--ink); }
+    .auth input:focus { border-color: #7e8e3c; }
+    .auth-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+    .auth-actions button { padding: 9px 14px; border: 1px solid var(--line); border-radius: 8px; background: transparent; cursor: pointer; }
+    .auth-actions .connect { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+
+    .mobile-menu { display: none; }
+    .toast { position: fixed; z-index: 20; right: 24px; bottom: 24px; max-width: 360px; padding: 12px 15px; border: 1px solid #6c3934; border-radius: 9px; background: #281513; color: #ffc4bd; font-size: 12px; opacity: 0; pointer-events: none; transform: translateY(10px); transition: .2s; }
+    .toast.show { opacity: 1; transform: translateY(0); }
+
+    @keyframes wave { to { height: 15px; } }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    @media (max-width: 720px) {
+      .app { grid-template-columns: 1fr; }
+      .sidebar { position: fixed; z-index: 8; inset: 0 18% 0 0; box-shadow: 30px 0 80px #000b; transform: translateX(-102%); transition: transform .25s; }
+      .sidebar.open { transform: translateX(0); }
+      .mobile-menu { display: grid; }
+      .topbar { padding: 15px 18px; }
+      .chat { padding: 30px 18px 18px; }
+      .message { grid-template-columns: 35px minmax(0, 1fr); gap: 10px; }
+      .avatar { width: 30px; }
+      .cost { font-size: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand"><span class="brand-mark"></span> Resonant</div>
+      <button class="new-chat" id="newChat">＋ New conversation</button>
+      <div class="history-label">Conversations</div>
+      <nav class="history" id="history" aria-label="Conversation history"></nav>
+      <div class="sidebar-footer">
+        <span>Gemini Live</span>
+        <button class="icon-button" id="settingsButton" aria-label="Open settings" title="Settings">⚙</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="icon-button mobile-menu" id="menuButton" aria-label="Open conversation history">☰</button>
+          <div class="title-wrap">
+            <h1 class="title" id="chatTitle">New conversation</h1>
+            <div class="status-row">
+              <div class="status" id="status">Ready when you are</div>
+              <button class="voice-button" id="voiceButton">
+                <span class="wave" aria-hidden="true"><i></i><i></i><i></i></span>
+                <span id="voiceLabel">Start</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <div class="cost" id="cost" title="Estimated from API usage metadata at current paid-tier rates">Est. $0.0000</div>
+          <button class="icon-button" id="conversationSettingsButton" aria-label="Edit this conversation's system prompt" title="Conversation system prompt">⚙</button>
+        </div>
+      </header>
+
+      <section class="chat" id="chat" aria-live="polite"></section>
+    </main>
+  </div>
+
+  <div class="scrim" id="scrim"></div>
+  <aside class="settings" id="settings" aria-hidden="true">
+    <div class="settings-head">
+      <h2>Settings</h2>
+      <button class="icon-button" id="closeSettings" aria-label="Close settings">✕</button>
+    </div>
+    <div class="settings-section">
+      <label class="field-label" for="settingsCredential">Gemini API key</label>
+      <p class="field-hint">Kept only in this browser tab. Short-lived ephemeral tokens are also supported.</p>
+      <input class="settings-input" id="settingsCredential" type="password" autocomplete="off" placeholder="API key or ephemeral token">
+    </div>
+    <div class="settings-section">
+      <label class="field-label" for="systemPrompt">System prompt</label>
+      <p class="field-hint">Applied when a new Gemini Live session starts.</p>
+      <textarea id="systemPrompt" spellcheck="true"></textarea>
+    </div>
+    <button class="save" id="saveSettings">Save settings</button>
+  </aside>
+
+  <div class="conversation-dialog" id="conversationDialog" role="dialog" aria-modal="true" aria-labelledby="conversationPromptTitle" aria-hidden="true">
+    <form class="conversation-card" id="conversationPromptForm">
+      <div class="settings-head">
+        <h2 id="conversationPromptTitle">Conversation prompt</h2>
+        <button class="icon-button" id="closeConversationPrompt" type="button" aria-label="Close conversation prompt">✕</button>
+      </div>
+      <label class="field-label" for="conversationSystemPrompt">System prompt</label>
+      <p class="field-hint">Applies only to this conversation. It cannot be changed after the conversation starts.</p>
+      <textarea id="conversationSystemPrompt" spellcheck="true"></textarea>
+      <div class="conversation-actions">
+        <button type="button" id="cancelConversationPrompt">Cancel</button>
+        <button class="save-conversation" type="submit">Save prompt</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="auth-dialog" id="authDialog" role="dialog" aria-modal="true" aria-labelledby="authTitle" aria-hidden="true">
+    <form class="auth" id="authForm">
+      <h2 id="authTitle">Connect to Gemini Live</h2>
+      <p>Paste a Gemini API key or short-lived ephemeral token. It stays in this browser tab and is never written to local storage. For production, issue ephemeral tokens from your backend.</p>
+      <input id="credential" type="password" autocomplete="off" placeholder="API key or ephemeral token" aria-label="Gemini credential" required>
+      <div class="auth-actions">
+        <button type="button" id="cancelAuth">Cancel</button>
+        <button class="connect" id="connectButton" type="submit">Connect</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="toast" id="toast" role="alert"></div>
+
+  <script>
+    const MODEL = "gemini-3.8-live";
+    const STORAGE_KEY = "resonant-conversations-v1";
+    const PROMPT_KEY = "resonant-system-prompt-v1";
+    const DEFAULT_PROMPT = "You are a thoughtful, concise voice assistant. Speak naturally and keep responses focused.";
+    const SPEAKER_ECHO_GUARD_SECONDS = .4;
+    const RATES_PER_MILLION = { input: { TEXT: .75, AUDIO: 3, VIDEO: 3 }, output: { TEXT: 4.5, AUDIO: 12 } };
+
+    const $ = selector => document.querySelector(selector);
+    const els = {
+      authDialog: $("#authDialog"), authForm: $("#authForm"), cancelAuth: $("#cancelAuth"), chat: $("#chat"), chatTitle: $("#chatTitle"), closeSettings: $("#closeSettings"),
+      cancelConversationPrompt: $("#cancelConversationPrompt"), closeConversationPrompt: $("#closeConversationPrompt"), connectButton: $("#connectButton"), conversationDialog: $("#conversationDialog"), conversationPromptForm: $("#conversationPromptForm"), conversationSettingsButton: $("#conversationSettingsButton"), conversationSystemPrompt: $("#conversationSystemPrompt"), cost: $("#cost"), credential: $("#credential"), history: $("#history"),
+      menuButton: $("#menuButton"), newChat: $("#newChat"), saveSettings: $("#saveSettings"), scrim: $("#scrim"),
+      settings: $("#settings"), settingsButton: $("#settingsButton"), settingsCredential: $("#settingsCredential"), sidebar: $("#sidebar"), status: $("#status"),
+      systemPrompt: $("#systemPrompt"), toast: $("#toast"), voiceButton: $("#voiceButton"), voiceLabel: $("#voiceLabel")
+    };
+
+    let conversations = loadConversations();
+    let activeId = conversations[0]?.id || createConversation();
+    let credential = sessionStorage.getItem("resonant-credential") || "";
+    let socket, stream, inputContext, processor, outputContext, nextPlaybackAt = 0, micSuppressedUntil = 0, sessionBaseCost = 0, setupTimer;
+    let playingSources = new Set();
+    let partials = { user: null, model: null };
+    let connecting = false;
+    let loggedFirstAudioChunk = false;
+
+    els.systemPrompt.value = localStorage.getItem(PROMPT_KEY) || DEFAULT_PROMPT;
+    render(true);
+
+    function loadConversations() {
+      try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
+      catch { return []; }
+    }
+
+    function createConversation() {
+      const id = crypto.randomUUID();
+      conversations.unshift({ id, title: "New conversation", createdAt: Date.now(), updatedAt: Date.now(), messages: [], usage: null, cost: 0, systemPrompt: localStorage.getItem(PROMPT_KEY) || DEFAULT_PROMPT, promptLocked: false });
+      persist();
+      return id;
+    }
+
+    function activeConversation() { return conversations.find(item => item.id === activeId); }
+    function persist() { localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations)); }
+
+    function render(scrollToLatest = false) {
+      const wasNearLatest = els.chat.scrollHeight - els.chat.scrollTop - els.chat.clientHeight < 80;
+      const previousScrollTop = els.chat.scrollTop;
+      const conversation = activeConversation();
+      els.chatTitle.textContent = conversation.title;
+      els.cost.textContent = `Est. $${conversation.cost.toFixed(4)}`;
+      els.conversationSettingsButton.disabled = Boolean(conversation.promptLocked || conversation.messages.length || socket || connecting);
+      els.history.innerHTML = conversations.map(item => `
+        <button class="history-item ${item.id === activeId ? "active" : ""}" data-id="${item.id}">
+          <span class="history-title">${escapeHtml(item.title)}</span>
+          <span class="history-time">${relativeTime(item.updatedAt)}</span>
+        </button>`).join("");
+
+      els.chat.innerHTML = conversation.messages.length ? conversation.messages.map((message, index) => `
+        <article class="message ${message.role} ${message.partial ? "partial" : ""}" data-message="${index}">
+          <div class="avatar">${message.role === "user" ? "YOU" : "AI"}</div>
+          <div><div class="speaker">${message.role === "user" ? "You" : "Gemini"}</div><div class="bubble">${escapeHtml(message.text)}</div></div>
+        </article>`).join("") : `
+        <div class="empty"><div class="empty-orb">⌁</div><h2>Talk it through.</h2><p>No keyboard needed. Start voice mode and speak naturally — you can interrupt at any time.</p></div>`;
+      els.chat.style.scrollBehavior = "auto";
+      els.chat.scrollTop = scrollToLatest || wasNearLatest ? els.chat.scrollHeight : previousScrollTop;
+      els.chat.style.removeProperty("scroll-behavior");
+    }
+
+    function relativeTime(timestamp) {
+      const minutes = Math.floor((Date.now() - timestamp) / 60000);
+      if (minutes < 1) return "now";
+      if (minutes < 60) return `${minutes}m`;
+      if (minutes < 1440) return `${Math.floor(minutes / 60)}h`;
+      return `${Math.floor(minutes / 1440)}d`;
+    }
+
+    function escapeHtml(value) {
+      const node = document.createElement("div");
+      node.textContent = value;
+      return node.innerHTML;
+    }
+
+    function setStatus(text, live = false) {
+      els.status.textContent = text;
+      els.status.classList.toggle("live", live);
+    }
+
+    function showToast(message) {
+      els.toast.textContent = message;
+      els.toast.classList.add("show");
+      clearTimeout(showToast.timer);
+      showToast.timer = setTimeout(() => els.toast.classList.remove("show"), 4200);
+    }
+
+    function openSettings(open) {
+      els.settings.classList.toggle("open", open);
+      els.settings.setAttribute("aria-hidden", String(!open));
+      els.scrim.classList.toggle("open", open);
+      if (open) els.settingsCredential.value = credential;
+    }
+
+    function openConversationSettings(open) {
+      if (open && els.conversationSettingsButton.disabled) return;
+      els.conversationDialog.classList.toggle("open", open);
+      els.conversationDialog.setAttribute("aria-hidden", String(!open));
+      if (open) {
+        const conversation = activeConversation();
+        els.conversationSystemPrompt.value = conversation.systemPrompt || localStorage.getItem(PROMPT_KEY) || DEFAULT_PROMPT;
+        setTimeout(() => els.conversationSystemPrompt.focus(), 50);
+      }
+    }
+
+    function openAuth(open) {
+      els.authDialog.classList.toggle("open", open);
+      els.authDialog.setAttribute("aria-hidden", String(!open));
+      if (open) setTimeout(() => els.credential.focus(), 50);
+    }
+
+    async function toggleVoice() {
+      if (socket || connecting) return stopVoice();
+      if (!credential) {
+        openAuth(true);
+        return;
+      }
+      await startVoice();
+    }
+
+    async function startVoice() {
+      connecting = true;
+      sessionBaseCost = activeConversation().cost;
+      els.voiceButton.disabled = true;
+      els.conversationSettingsButton.disabled = true;
+      setStatus("Connecting…");
+      console.log("[Resonant] Starting voice mode", { model: MODEL, conversationId: activeId });
+      try {
+        console.log("[Resonant] Requesting microphone access");
+        stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true }, video: false });
+        console.log("[Resonant] Microphone access granted", stream.getAudioTracks().map(track => ({ label: track.label, settings: track.getSettings() })));
+        const ephemeral = credential.startsWith("auth_tokens/");
+        const method = ephemeral ? "BidiGenerateContentConstrained" : "BidiGenerateContent";
+        const auth = ephemeral ? `access_token=${encodeURIComponent(credential)}` : `key=${encodeURIComponent(credential)}`;
+        console.log("[Resonant] Opening Gemini WebSocket", { apiVersion: "v1beta", authType: ephemeral ? "ephemeral-token" : "api-key", method });
+        socket = new WebSocket(`wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.${method}?${auth}`);
+        socket.addEventListener("open", sendSetup);
+        socket.addEventListener("message", onServerMessage);
+        socket.addEventListener("error", event => {
+          console.error("[Resonant] WebSocket error", event);
+          fail("Could not connect to Gemini Live.");
+        });
+        socket.addEventListener("close", event => {
+          console.log("[Resonant] WebSocket closed", { code: event.code, reason: event.reason || "(no reason supplied)", wasClean: event.wasClean });
+          const unexpected = els.voiceButton.classList.contains("active") && event.code !== 1000;
+          cleanupAudio();
+          if (unexpected) showToast(event.reason || "The Gemini Live session ended.");
+        });
+      } catch (error) {
+        console.error("[Resonant] Voice startup failed", error);
+        fail(error.name === "NotAllowedError" ? "Microphone access is required for voice mode." : error.message);
+      } finally {
+        connecting = false;
+        els.voiceButton.disabled = false;
+      }
+    }
+
+    function sendSetup() {
+      console.log("[Resonant] WebSocket open; sending Live API setup", { model: MODEL, responseModalities: ["AUDIO"] });
+      socket.send(JSON.stringify({ setup: {
+        model: `models/${MODEL}`,
+        generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Kore" } } } },
+        systemInstruction: { parts: [{ text: activeConversation().systemPrompt || localStorage.getItem(PROMPT_KEY) || DEFAULT_PROMPT }] },
+        inputAudioTranscription: {},
+        outputAudioTranscription: {},
+        sessionResumption: {},
+        contextWindowCompression: { slidingWindow: {} }
+      }}));
+      clearTimeout(setupTimer);
+      setupTimer = setTimeout(() => {
+        console.warn("[Resonant] Still waiting for setupComplete after 10 seconds", { readyState: socket?.readyState });
+        setStatus("Still waiting for Gemini…");
+      }, 10000);
+    }
+
+    async function onServerMessage(event) {
+      let message;
+      try {
+        message = JSON.parse(typeof event.data === "string" ? event.data : await event.data.text());
+      } catch (error) {
+        console.error("[Resonant] Could not parse server message", error);
+        return;
+      }
+      const messageTypes = Object.keys(message).filter(key => key !== "usageMetadata");
+      if (messageTypes.some(type => type !== "serverContent")) console.log("[Resonant] Server message", messageTypes);
+      if (message.setupComplete) {
+        clearTimeout(setupTimer);
+        console.log("[Resonant] Live API setup complete", message.setupComplete);
+        activeConversation().promptLocked = true;
+        persist();
+        const previous = activeConversation().messages.filter(item => !item.partial);
+        if (previous.length) {
+          console.log("[Resonant] Restoring conversation context", { turns: previous.length });
+          socket.send(JSON.stringify({ clientContent: {
+            turns: previous.map(item => ({ role: item.role === "model" ? "model" : "user", parts: [{ text: item.text }] })),
+            turnComplete: false
+          }}));
+        }
+        await startMicrophone();
+        els.voiceButton.classList.add("active");
+        els.voiceLabel.textContent = "Stop";
+        setStatus("Listening", true);
+      }
+
+      const content = message.serverContent;
+      if (content?.interrupted) stopPlayback();
+      if (content?.inputTranscription?.text) appendTranscript("user", content.inputTranscription.text, !content.inputTranscription.finished);
+      if (content?.outputTranscription?.text) appendTranscript("model", content.outputTranscription.text, !content.outputTranscription.finished);
+      for (const part of content?.modelTurn?.parts || []) {
+        if (part.inlineData?.data) playPcm(part.inlineData.data);
+      }
+      if (content?.turnComplete) {
+        console.log("[Resonant] Turn complete");
+        finalizePartials();
+      }
+      if (message.usageMetadata) updateCost(message.usageMetadata);
+      if (message.goAway) {
+        console.warn("[Resonant] Server requested disconnect", message.goAway);
+        setStatus("Session ending soon");
+      }
+    }
+
+    async function startMicrophone() {
+      inputContext = new AudioContext();
+      loggedFirstAudioChunk = false;
+      console.log("[Resonant] Starting microphone stream", { browserSampleRate: inputContext.sampleRate, apiSampleRate: 16000 });
+      const source = inputContext.createMediaStreamSource(stream);
+      processor = inputContext.createScriptProcessor(4096, 1, 1);
+      processor.onaudioprocess = event => {
+        if (socket?.readyState !== WebSocket.OPEN || speakerIsAudible()) return;
+        const pcm = floatTo16BitPcm(downsample(event.inputBuffer.getChannelData(0), inputContext.sampleRate, 16000));
+        socket.send(JSON.stringify({ realtimeInput: { audio: { data: bytesToBase64(new Uint8Array(pcm.buffer)), mimeType: "audio/pcm;rate=16000" } } }));
+        if (!loggedFirstAudioChunk) {
+          loggedFirstAudioChunk = true;
+          console.log("[Resonant] First microphone audio chunk sent", { samples: pcm.length });
+        }
+      };
+      source.connect(processor);
+      processor.connect(inputContext.destination);
+    }
+
+    function speakerIsAudible() {
+      return outputContext && outputContext.currentTime < micSuppressedUntil;
+    }
+
+    function downsample(samples, fromRate, toRate) {
+      if (fromRate === toRate) return samples;
+      const ratio = fromRate / toRate;
+      const output = new Float32Array(Math.round(samples.length / ratio));
+      for (let i = 0; i < output.length; i++) {
+        const start = Math.floor(i * ratio);
+        const end = Math.min(Math.floor((i + 1) * ratio), samples.length);
+        let sum = 0;
+        for (let j = start; j < end; j++) sum += samples[j];
+        output[i] = sum / Math.max(1, end - start);
+      }
+      return output;
+    }
+
+    function floatTo16BitPcm(samples) {
+      const output = new Int16Array(samples.length);
+      for (let i = 0; i < samples.length; i++) {
+        const sample = Math.max(-1, Math.min(1, samples[i]));
+        output[i] = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
+      }
+      return output;
+    }
+
+    function bytesToBase64(bytes) {
+      let binary = "";
+      for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+      return btoa(binary);
+    }
+
+    function playPcm(base64) {
+      outputContext ||= new AudioContext({ sampleRate: 24000 });
+      const bytes = Uint8Array.from(atob(base64), char => char.charCodeAt(0));
+      const samples = new Float32Array(bytes.length / 2);
+      const view = new DataView(bytes.buffer);
+      for (let i = 0; i < samples.length; i++) samples[i] = view.getInt16(i * 2, true) / 32768;
+      const buffer = outputContext.createBuffer(1, samples.length, 24000);
+      buffer.copyToChannel(samples, 0);
+      const source = outputContext.createBufferSource();
+      source.buffer = buffer;
+      source.connect(outputContext.destination);
+      nextPlaybackAt = Math.max(nextPlaybackAt, outputContext.currentTime);
+      source.start(nextPlaybackAt);
+      nextPlaybackAt += buffer.duration;
+      micSuppressedUntil = nextPlaybackAt + SPEAKER_ECHO_GUARD_SECONDS;
+      playingSources.add(source);
+      source.onended = () => playingSources.delete(source);
+    }
+
+    function stopPlayback() {
+      playingSources.forEach(source => { try { source.stop(); } catch {} });
+      playingSources.clear();
+      nextPlaybackAt = outputContext?.currentTime || 0;
+      micSuppressedUntil = 0;
+    }
+
+    function appendTranscript(role, text, partial) {
+      const conversation = activeConversation();
+      let message = partials[role] !== null ? conversation.messages[partials[role]] : null;
+      if (!message || !message.partial) {
+        message = { role, text: "", partial: true };
+        conversation.messages.push(message);
+        partials[role] = conversation.messages.length - 1;
+      }
+      message.text += text;
+      message.partial = partial;
+      if (!partial) partials[role] = null;
+      conversation.updatedAt = Date.now();
+      const firstUser = conversation.messages.find(item => item.role === "user" && item.text.trim());
+      if (conversation.title === "New conversation" && firstUser) conversation.title = firstUser.text.trim().slice(0, 42);
+      persist();
+      render();
+    }
+
+    function finalizePartials() {
+      const conversation = activeConversation();
+      for (const role of ["user", "model"]) {
+        if (partials[role] !== null && conversation.messages[partials[role]]) conversation.messages[partials[role]].partial = false;
+        partials[role] = null;
+      }
+      persist();
+      render();
+    }
+
+    function updateCost(usage) {
+      let total = 0;
+      for (const detail of usage.promptTokensDetails || []) total += (detail.tokenCount || 0) * (RATES_PER_MILLION.input[detail.modality] || 0) / 1e6;
+      for (const detail of usage.responseTokensDetails || []) total += (detail.tokenCount || 0) * (RATES_PER_MILLION.output[detail.modality] || 0) / 1e6;
+      const conversation = activeConversation();
+      conversation.usage = usage;
+      conversation.cost = sessionBaseCost + total;
+      persist();
+      els.cost.textContent = `Est. $${conversation.cost.toFixed(4)}`;
+    }
+
+    function stopVoice() {
+      console.log("[Resonant] Stopping voice mode", { socketState: socket?.readyState ?? "none" });
+      if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ realtimeInput: { audioStreamEnd: true } }));
+      socket?.close(1000, "User ended session");
+      cleanupAudio();
+    }
+
+    function cleanupAudio() {
+      clearTimeout(setupTimer);
+      setupTimer = null;
+      socket = null;
+      stream?.getTracks().forEach(track => track.stop());
+      stream = null;
+      processor?.disconnect();
+      processor = null;
+      inputContext?.close();
+      inputContext = null;
+      stopPlayback();
+      els.voiceButton.classList.remove("active");
+      els.voiceButton.disabled = false;
+      els.voiceLabel.textContent = "Start";
+      setStatus("Ready when you are");
+      finalizePartials();
+    }
+
+    function fail(message) {
+      console.error("[Resonant] Voice mode error", message);
+      showToast(message);
+      cleanupAudio();
+      if (/connect|auth|key|token/i.test(message)) {
+        credential = "";
+        sessionStorage.removeItem("resonant-credential");
+      }
+    }
+
+    els.history.addEventListener("click", event => {
+      const item = event.target.closest("[data-id]");
+      if (!item) return;
+      stopVoice();
+      activeId = item.dataset.id;
+      els.sidebar.classList.remove("open");
+      render(true);
+    });
+
+    els.newChat.addEventListener("click", () => {
+      stopVoice();
+      activeId = createConversation();
+      els.sidebar.classList.remove("open");
+      render(true);
+    });
+
+    els.voiceButton.addEventListener("click", toggleVoice);
+    els.conversationSettingsButton.addEventListener("click", () => openConversationSettings(true));
+    els.closeConversationPrompt.addEventListener("click", () => openConversationSettings(false));
+    els.cancelConversationPrompt.addEventListener("click", () => openConversationSettings(false));
+    els.conversationDialog.addEventListener("click", event => {
+      if (event.target === els.conversationDialog) openConversationSettings(false);
+    });
+    els.conversationPromptForm.addEventListener("submit", event => {
+      event.preventDefault();
+      const conversation = activeConversation();
+      if (conversation.promptLocked || conversation.messages.length) return openConversationSettings(false);
+      conversation.systemPrompt = els.conversationSystemPrompt.value.trim() || localStorage.getItem(PROMPT_KEY) || DEFAULT_PROMPT;
+      persist();
+      openConversationSettings(false);
+    });
+    els.settingsButton.addEventListener("click", () => openSettings(true));
+    els.closeSettings.addEventListener("click", () => openSettings(false));
+    els.scrim.addEventListener("click", () => { openSettings(false); els.sidebar.classList.remove("open"); });
+    els.menuButton.addEventListener("click", () => els.sidebar.classList.add("open"));
+    els.saveSettings.addEventListener("click", () => {
+      localStorage.setItem(PROMPT_KEY, els.systemPrompt.value.trim() || DEFAULT_PROMPT);
+      credential = els.settingsCredential.value.trim();
+      if (credential) sessionStorage.setItem("resonant-credential", credential);
+      else sessionStorage.removeItem("resonant-credential");
+      openSettings(false);
+    });
+
+    els.cancelAuth.addEventListener("click", () => openAuth(false));
+    els.authDialog.addEventListener("click", event => {
+      if (event.target === els.authDialog) openAuth(false);
+    });
+    els.authForm.addEventListener("submit", async event => {
+      event.preventDefault();
+      credential = els.credential.value.trim();
+      if (!credential) return;
+      sessionStorage.setItem("resonant-credential", credential);
+      els.credential.value = "";
+      openAuth(false);
+      await startVoice();
+    });
+  </script>
+</body>
+</html>
